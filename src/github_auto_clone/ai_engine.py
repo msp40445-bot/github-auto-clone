@@ -1,4 +1,8 @@
-"""AI engine for intelligent code analysis, feature extraction, and summarization."""
+"""AI engine for intelligent code analysis, feature extraction, and summarization.
+
+Uses Ollama for local, free AI inference. Runs on macOS with ~1-3GB RAM.
+Default model: qwen2.5:1.5b (fast, small, good at code analysis).
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ import json
 import logging
 from typing import Any
 
-from openai import OpenAI
+import ollama
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from github_auto_clone.config import Settings, get_settings
@@ -16,40 +20,62 @@ logger = logging.getLogger(__name__)
 
 
 class AIEngine:
-    """AI-powered analysis engine using OpenAI-compatible APIs."""
+    """AI-powered analysis engine using Ollama (local, free)."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        self._client: OpenAI | None = None
+        self._client: ollama.Client | None = None
 
     @property
-    def client(self) -> OpenAI:
+    def client(self) -> ollama.Client:
         if self._client is None:
-            kwargs: dict[str, Any] = {"api_key": self.settings.openai_api_key}
-            if self.settings.openai_base_url:
-                kwargs["base_url"] = self.settings.openai_base_url
-            self._client = OpenAI(**kwargs)
+            self._client = ollama.Client(host=self.settings.ollama_host)
         return self._client
+
+    def ensure_model(self) -> bool:
+        """Check if the model is available and pull it if not."""
+        try:
+            models = self.client.list()
+            model_names = [
+                m.model for m in models.models
+            ]
+            target = self.settings.ollama_model
+            if not any(target in name for name in model_names):
+                logger.info(f"Pulling model {target}... (first time only)")
+                self.client.pull(target)
+            return True
+        except Exception as e:
+            logger.error(f"Ollama not available: {e}")
+            return False
+
+    def is_available(self) -> bool:
+        """Check if Ollama is running and reachable."""
+        try:
+            self.client.list()
+            return True
+        except Exception:
+            return False
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=15))
     def _chat(self, system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
-        """Make a chat completion request."""
-        response = self.client.chat.completions.create(
-            model=self.settings.openai_model,
+        """Make a chat completion request via Ollama."""
+        response = self.client.chat(
+            model=self.settings.ollama_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=temperature,
-            max_tokens=self.settings.ai_max_tokens,
+            options={"temperature": temperature},
         )
-        content = response.choices[0].message.content
-        return content or ""
+        return response.message.content or ""
 
     def _chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """Make a chat completion request and parse JSON response."""
-        json_instruction = "\n\nYou MUST respond with valid JSON only. No markdown, no explanation."
-        full_system = system_prompt + json_instruction
+        json_suffix = (
+            "\n\nYou MUST respond with valid JSON only."
+            " No markdown, no explanation, no extra text."
+        )
+        full_system = system_prompt + json_suffix
         raw = self._chat(full_system, user_prompt, temperature=0.1)
         # Strip markdown code fences if present
         raw = raw.strip()
@@ -60,7 +86,16 @@ class AIEngine:
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             raw = "\n".join(lines)
-        return json.loads(raw)
+        # Try to find JSON in the response
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            # Try to extract JSON from mixed content
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start >= 0 and end > start:
+                return json.loads(raw[start:end])
+            raise
 
     def generate_search_queries(self, ai_query: AISearchQuery) -> list[SearchQuery]:
         """Convert a natural language query into structured GitHub search queries."""

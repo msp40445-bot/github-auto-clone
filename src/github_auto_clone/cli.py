@@ -147,7 +147,7 @@ def search(
     settings = get_settings()
 
     with GitHubClient(settings) as client:
-        if ai and settings.has_openai_key:
+        if ai and settings.has_ollama:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[bold blue]AI is crafting optimal search queries..."),
@@ -173,7 +173,7 @@ def search(
                     unique_repos.append(repo)
 
             # AI ranking
-            if unique_repos and settings.has_openai_key:
+            if unique_repos and settings.has_ollama:
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[bold blue]AI is ranking results by relevance..."),
@@ -269,7 +269,7 @@ def analyze(
     ))
 
     # AI Summary
-    if summarize and settings.has_openai_key and readme_content:
+    if summarize and settings.has_ollama and readme_content:
         with Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]AI is analyzing the repository..."),
@@ -293,7 +293,7 @@ def analyze(
         ))
 
     # Extract features
-    if settings.has_openai_key:
+    if settings.has_ollama:
         with Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]Extracting features from codebase..."),
@@ -327,11 +327,15 @@ def analyze(
             imp_table = Table(title="Feature Importance (PageRank)")
             imp_table.add_column("Feature", style="cyan")
             imp_table.add_column("Score", justify="right", style="yellow")
-            for name_val, score in sorted(importance.items(), key=lambda x: -x[1]):
+            for name_val, score in sorted(
+                importance.items(), key=lambda x: -x[1]
+            ):
                 imp_table.add_row(name_val, f"{score:.4f}")
             console.print(imp_table)
     else:
-        console.print("[yellow]Set OPENAI_API_KEY for AI-powered feature extraction[/yellow]")
+        console.print(
+            "[yellow]Start Ollama for AI-powered feature extraction[/yellow]"
+        )
 
 
 @app.command()
@@ -348,8 +352,8 @@ def extract(
     setup_logging(verbose)
     settings = get_settings()
 
-    if not settings.has_openai_key:
-        console.print("[red]OPENAI_API_KEY is required for feature extraction[/red]")
+    if not settings.has_ollama:
+        console.print("[red]Ollama must be running for feature extraction[/red]")
         raise typer.Exit(1)
 
     owner, name = _parse_repo_arg(repo_arg)
@@ -440,8 +444,8 @@ def ai_search(
     setup_logging(verbose)
     settings = get_settings()
 
-    if not settings.has_openai_key:
-        console.print("[red]OPENAI_API_KEY is required for AI search[/red]")
+    if not settings.has_ollama:
+        console.print("[red]Ollama must be running for AI search[/red]")
         raise typer.Exit(1)
 
     engine = AIEngine(settings)
@@ -534,8 +538,8 @@ def graph(
     setup_logging(verbose)
     settings = get_settings()
 
-    if not settings.has_openai_key:
-        console.print("[red]OPENAI_API_KEY is required[/red]")
+    if not settings.has_ollama:
+        console.print("[red]Ollama must be running[/red]")
         raise typer.Exit(1)
 
     owner, name = _parse_repo_arg(repo_arg)
@@ -606,9 +610,9 @@ def quickstart(
         border_style="cyan",
     ))
 
-    if not settings.has_openai_key:
-        console.print("[red]OPENAI_API_KEY is required for quickstart mode[/red]")
-        console.print("[dim]Set it with: export OPENAI_API_KEY=your-key[/dim]")
+    if not settings.has_ollama:
+        console.print("[red]Ollama must be running for quickstart mode[/red]")
+        console.print("[dim]Install: brew install ollama && ollama serve[/dim]")
         raise typer.Exit(1)
 
     # Get user's need

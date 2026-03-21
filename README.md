@@ -4,6 +4,8 @@
 
 Search any GitHub repository, analyze its codebase with AI, extract discrete features, and package them into clean, importable folders you can drop into any project.
 
+Uses **Ollama** for free, local AI inference — no API keys needed, runs on macOS with ~1-3GB RAM.
+
 ## The Vision
 
 Imagine you're building an enterprise AI agent but need a browser automation module. Instead of building from scratch, you:
@@ -18,6 +20,23 @@ That's it. You go from "I need feature X" to "feature X is in my project" in min
 
 ## Installation
 
+### 1. Install Ollama (free local AI)
+
+```bash
+# macOS
+brew install ollama
+
+# Or download from https://ollama.com
+
+# Start the Ollama server
+ollama serve
+
+# Pull the default model (~1.5GB, good for code analysis)
+ollama pull qwen2.5:1.5b
+```
+
+### 2. Install GitHub Auto Clone
+
 ```bash
 pip install -e .
 ```
@@ -30,23 +49,38 @@ pip install -e ".[dev]"
 
 ## Configuration
 
-Set these environment variables:
-
 ```bash
-# Required for AI features (search, analysis, extraction)
-export OPENAI_API_KEY="your-openai-api-key"
-
-# Optional but recommended for higher rate limits
+# Optional but recommended for higher GitHub API rate limits
 export GITHUB_TOKEN="your-github-token"
 
-# Optional: use a different OpenAI-compatible API
-export OPENAI_BASE_URL="https://your-api.com/v1"
-export OPENAI_MODEL="gpt-4o"
+# Optional: use a different Ollama model
+export OLLAMA_MODEL="qwen2.5:1.5b"  # default, ~1.5GB
+# Other options: phi3:mini (~2.3GB), llama3.2:1b (~1.3GB)
+
+# Optional: custom Ollama host
+export OLLAMA_HOST="http://localhost:11434"  # default
 ```
 
 ## Usage
 
-### Quick Start — Interactive Mode
+### Web UI (recommended)
+
+```bash
+# Start the web interface
+ghclone-web
+
+# Open http://localhost:5000 in your browser
+```
+
+The web UI has 5 sections:
+
+- **AI Chat** — Chat with AI about what you need, get search suggestions
+- **Search Repos** — Search GitHub with optional AI-powered ranking
+- **List Repos** — Browse all repos for any GitHub user
+- **Analyze & Extract** — Deep-analyze any repo, see all features, extract them
+- **Manual Input** — Input any repo URL (public/private) and extract features to a target directory
+
+### CLI — Quick Start
 
 ```bash
 ghclone quickstart
@@ -54,7 +88,7 @@ ghclone quickstart
 
 Describe what you need in plain English, and the tool will find, analyze, extract, and package it for you.
 
-### Search for Repositories
+### CLI — Search for Repositories
 
 ```bash
 # Basic search
@@ -67,14 +101,14 @@ ghclone search "I need a production-ready WebSocket server with authentication" 
 ghclone search "graph database" --lang Python --stars 1000
 ```
 
-### List User Repositories
+### CLI — List User Repositories
 
 ```bash
 ghclone list-repos torvalds
 ghclone list-repos openai --sort stars
 ```
 
-### Analyze a Repository
+### CLI — Analyze a Repository
 
 ```bash
 # Analyze and extract features
@@ -92,7 +126,7 @@ This will:
 - Build a feature dependency graph
 - Show feature importance rankings
 
-### Extract & Package Features
+### CLI — Extract & Package Features
 
 ```bash
 # Extract ALL features
@@ -114,7 +148,7 @@ The output package includes:
 - `requirements.txt` — Python dependencies (or `package.json` for JS/TS)
 - `feature_graph.json` — Feature relationship data
 
-### AI-Powered Search
+### CLI — AI-Powered Search
 
 ```bash
 # Natural language search
@@ -124,7 +158,7 @@ ghclone ai-search "production-ready GraphRAG implementation with vector database
 ghclone ai-search "enterprise browser agent" --analyze
 ```
 
-### Feature Dependency Graph
+### CLI — Feature Dependency Graph
 
 ```bash
 # Build and visualize the feature graph
@@ -134,16 +168,26 @@ ghclone graph fastapi/fastapi
 ghclone graph owner/repo -o graph.json
 ```
 
+## Safety & Rate Limiting
+
+GitHub Auto Clone includes built-in safety measures:
+
+- **Request throttling** — Polite delays between API calls (configurable)
+- **Per-minute rate limiting** — Stays within GitHub's rate limits
+- **Automatic backoff** — Waits and retries when rate limited
+- **No spam behavior** — Single-threaded, sequential requests
+- **Token-aware** — Uses authenticated rate limits when token is set
+
 ## How It Works
 
 ### 1. Search & Discovery
-The GitHub API client searches repositories by keywords, language, stars, and topics. The AI engine converts natural language queries into optimal search strategies and ranks results by relevance.
+The GitHub API client searches repositories with built-in rate limiting. The AI engine (Ollama) converts natural language queries into optimal search strategies and ranks results.
 
 ### 2. Repository Analysis
 Repos are cloned locally and scanned. The analyzer identifies all source files, their languages, and categorizes them (source, test, config, docs).
 
 ### 3. AI Feature Extraction
-The AI engine reads through the codebase and identifies discrete, extractable features. For each feature it determines:
+The local AI reads through the codebase and identifies discrete, extractable features. For each feature it determines:
 - Entry points (functions, classes)
 - File dependencies
 - External package dependencies
@@ -169,10 +213,12 @@ Selected features are packaged into a clean folder:
 ```
 src/github_auto_clone/
 ├── cli.py              # Typer CLI with rich terminal UI
+├── web.py              # Flask web frontend
+├── templates/          # HTML templates for web UI
 ├── config.py           # Pydantic settings from env vars
 ├── models.py           # Data models (RepoInfo, Feature, etc.)
-├── github_client.py    # GitHub API client with retry logic
-├── ai_engine.py        # OpenAI-powered analysis engine
+├── github_client.py    # GitHub API client with rate limiting
+├── ai_engine.py        # Ollama-powered analysis engine (local, free)
 ├── repo_analyzer.py    # Repository cloning and file scanning
 ├── feature_extractor.py # Feature identification and extraction
 ├── packager.py         # Feature packaging into importable folders
@@ -183,10 +229,11 @@ src/github_auto_clone/
 ## Tech Stack
 
 - **Python 3.10+** — Modern Python with type hints
+- **Ollama** — Free, local AI inference (no API keys needed)
+- **Flask** — Web frontend for browser-based usage
 - **Typer** — CLI framework
 - **Rich** — Beautiful terminal UI
 - **httpx** — HTTP client for GitHub API
-- **OpenAI** — AI-powered analysis
 - **GitPython** — Git operations
 - **NetworkX** — Graph algorithms
 - **Pydantic** — Data validation

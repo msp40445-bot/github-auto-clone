@@ -1,8 +1,13 @@
-"""GitHub API client for searching and fetching repository information."""
+"""GitHub API client for searching and fetching repository information.
+
+Includes rate limiting and safety measures to avoid
+looking like spam or getting banned.
+"""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -15,11 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 class GitHubClient:
-    """Client for interacting with the GitHub API."""
+    """Client for interacting with the GitHub API.
+
+    Includes built-in rate limiting and polite request delays
+    to avoid triggering abuse detection or bans.
+    """
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self._client: httpx.Client | None = None
+        self._last_request_time: float = 0.0
+        self._request_count: int = 0
+        self._minute_start: float = time.time()
 
     @property
     def client(self) -> httpx.Client:
@@ -49,13 +61,48 @@ class GitHubClient:
     def __exit__(self, *args: object) -> None:
         self.close()
 
+    def _throttle(self) -> None:
+        """Apply rate limiting to avoid abuse detection."""
+        now = time.time()
+
+        # Reset counter every minute
+        if now - self._minute_start > 60:
+            self._request_count = 0
+            self._minute_start = now
+
+        # Check per-minute limit
+        rpm = self.settings.github_requests_per_minute
+        if self._request_count >= rpm:
+            sleep_time = 60 - (now - self._minute_start)
+            if sleep_time > 0:
+                logger.info(f"Rate limit: waiting {sleep_time:.1f}s")
+                time.sleep(sleep_time)
+            self._request_count = 0
+            self._minute_start = time.time()
+
+        # Polite delay between requests
+        delay = self.settings.request_delay_seconds
+        elapsed = now - self._last_request_time
+        if elapsed < delay:
+            time.sleep(delay - elapsed)
+
+        self._last_request_time = time.time()
+        self._request_count += 1
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Make a GET request to the GitHub API with retry logic."""
+        """Make a GET request to the GitHub API with retry and rate limiting."""
+        self._throttle()
         response = self.client.get(endpoint, params=params)
         if response.status_code == 403:
             remaining = response.headers.get("X-RateLimit-Remaining", "unknown")
             logger.warning(f"Rate limited. Remaining: {remaining}")
+            # If rate limited, wait and retry
+            reset_time = response.headers.get("X-RateLimit-Reset")
+            if reset_time:
+                wait_secs = max(int(reset_time) - int(time.time()), 1)
+                logger.info(f"Waiting {wait_secs}s for rate limit reset")
+                time.sleep(min(wait_secs, 60))
             raise httpx.HTTPStatusError(
                 "Rate limited",
                 request=response.request,

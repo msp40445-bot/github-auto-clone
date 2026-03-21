@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Auto Clone</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0d1117; --surface: #161b22; --border: #30363d;
+            --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+            --green: #3fb950; --yellow: #d29922; --red: #f85149;
+            --purple: #bc8cff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg); color: var(--text);
+            line-height: 1.5; min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border); padding: 16px 0;
+            margin-bottom: 24px; display: flex; align-items: center;
+            justify-content: space-between;
+        }
+        header h1 { font-size: 20px; font-weight: 600; }
+        header h1 span { color: var(--accent); }
+        .status-badges { display: flex; gap: 8px; }
+        .badge {
+            padding: 4px 10px; border-radius: 12px; font-size: 12px;
+            font-weight: 500;
+        }
+        .badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge.warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge.err { background: rgba(248,81,73,0.15); color: var(--red); }
+
+        /* Tabs */
+        .tabs {
+            display: flex; gap: 2px; margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 10px 16px; cursor: pointer; border: none;
+            background: none; color: var(--text-dim); font-size: 14px;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        /* Panels */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Inputs */
+        .input-group { display: flex; gap: 8px; margin-bottom: 16px; }
+        input[type="text"], input[type="number"], select {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: 6px;
+            font-size: 14px; outline: none; flex: 1;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+        button {
+            background: var(--accent); color: #fff; border: none;
+            padding: 10px 20px; border-radius: 6px; cursor: pointer;
+            font-size: 14px; font-weight: 500; white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.secondary {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text);
+        }
+        button.green { background: var(--green); }
+
+        /* Chat */
+        .chat-container {
+            display: flex; flex-direction: column; height: 500px;
+        }
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 16px;
+            background: var(--surface); border-radius: 8px 8px 0 0;
+            border: 1px solid var(--border); border-bottom: none;
+        }
+        .chat-message {
+            margin-bottom: 12px; padding: 10px 14px;
+            border-radius: 8px; max-width: 80%;
+        }
+        .chat-message.user {
+            background: rgba(88,166,255,0.15); margin-left: auto;
+            text-align: right;
+        }
+        .chat-message.ai {
+            background: rgba(188,140,255,0.1); margin-right: auto;
+        }
+        .chat-message .label {
+            font-size: 11px; color: var(--text-dim);
+            margin-bottom: 4px; font-weight: 600;
+        }
+        .chat-input {
+            display: flex; border-radius: 0 0 8px 8px;
+            border: 1px solid var(--border); overflow: hidden;
+        }
+        .chat-input input {
+            border: none; border-radius: 0; flex: 1;
+        }
+        .chat-input button { border-radius: 0; }
+
+        /* Cards */
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 16px; margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .card:hover { border-color: var(--accent); }
+        .card h3 { font-size: 16px; margin-bottom: 4px; }
+        .card h3 a { color: var(--accent); text-decoration: none; }
+        .card p { color: var(--text-dim); font-size: 14px; margin-bottom: 8px; }
+        .card-meta {
+            display: flex; gap: 16px; font-size: 13px; color: var(--text-dim);
+        }
+        .card-meta span { display: flex; align-items: center; gap: 4px; }
+        .card-actions { margin-top: 10px; display: flex; gap: 8px; }
+        .card-actions button { padding: 6px 12px; font-size: 12px; }
+        .score {
+            background: rgba(63,185,80,0.15); color: var(--green);
+            padding: 2px 8px; border-radius: 10px; font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Features */
+        .feature-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 14px; margin-bottom: 8px;
+        }
+        .feature-card h4 {
+            font-size: 14px; display: flex; align-items: center; gap: 8px;
+        }
+        .feature-card .desc { color: var(--text-dim); font-size: 13px; margin: 6px 0; }
+        .complexity {
+            padding: 2px 8px; border-radius: 10px; font-size: 11px;
+            font-weight: 600;
+        }
+        .complexity.low { background: rgba(63,185,80,0.15); color: var(--green); }
+        .complexity.medium { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .complexity.high { background: rgba(248,81,73,0.15); color: var(--red); }
+        .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; background: rgba(88,166,255,0.1);
+            color: var(--accent); margin: 2px;
+        }
+
+        /* Loading */
+        .loading {
+            display: none; text-align: center; padding: 40px; color: var(--text-dim);
+        }
+        .loading.active { display: block; }
+        .spinner {
+            display: inline-block; width: 24px; height: 24px;
+            border: 3px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Results */
+        .results { margin-top: 16px; }
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: var(--text-dim);
+        }
+        .empty-state h3 { margin-bottom: 8px; color: var(--text); }
+
+        /* Filters row */
+        .filters {
+            display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+        }
+        .filters input, .filters select { flex: none; width: auto; }
+        .filters label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 13px; color: var(--text-dim);
+        }
+        .filters input[type="checkbox"] { width: auto; flex: none; }
+
+        /* Summary panel */
+        .summary-panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 20px; margin-bottom: 16px;
+        }
+        .summary-panel h3 { color: var(--accent); margin-bottom: 12px; }
+        .summary-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        }
+        .summary-item label {
+            font-size: 12px; color: var(--text-dim); text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .summary-item p { font-size: 14px; margin-top: 4px; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            padding: 12px 20px; border-radius: 8px; font-size: 14px;
+            z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast.success { background: var(--green); color: #fff; }
+        .toast.error { background: var(--red); color: #fff; }
+
+        /* Extract modal */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 100;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 24px; width: 90%; max-width: 500px;
+        }
+        .modal h3 { margin-bottom: 16px; }
+        .modal .form-group { margin-bottom: 14px; }
+        .modal .form-group label {
+            display: block; font-size: 13px; color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+        .modal .form-group input { width: 100%; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1><span>GitHub</span> Auto Clone</h1>
+        <div class="status-badges">
+            <span class="badge {{ 'ok' if ai_available else 'err' }}" id="aiStatus">
+                AI: {{ 'Online' if ai_available else 'Offline' }}
+            </span>
+            <span class="badge {{ 'ok' if has_github_token else 'warn' }}" id="ghStatus">
+                GitHub: {{ 'Token Set' if has_github_token else 'No Token' }}
+            </span>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('chat')">AI Chat</button>
+        <button class="tab" onclick="switchTab('search')">Search Repos</button>
+        <button class="tab" onclick="switchTab('repos')">List Repos</button>
+        <button class="tab" onclick="switchTab('analyze')">Analyze & Extract</button>
+        <button class="tab" onclick="switchTab('manual')">Manual Input</button>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="panel active" id="panel-chat">
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-message ai">
+                    <div class="label">AI ({{ ollama_model }})</div>
+                    <div>Hi! I can help you find GitHub repos and extract features.
+                    Tell me what you need - e.g. "I need a browser automation agent for my enterprise AI app"</div>
+                </div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="chatInput" placeholder="Describe what you need..."
+                       onkeydown="if(event.key==='Enter')sendChat()">
+                <button onclick="sendChat()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="panel" id="panel-search">
+        <div class="input-group">
+            <input type="text" id="searchQuery" placeholder="Search GitHub repos...e.g. browser agent, trading bot, RAG pipeline"
+                   onkeydown="if(event.key==='Enter')searchRepos()">
+            <button onclick="searchRepos()">Search</button>
+        </div>
+        <div class="filters">
+            <input type="text" id="searchLang" placeholder="Language" style="width:120px">
+            <input type="number" id="searchStars" placeholder="Min stars" style="width:100px" value="10">
+            <label>
+                <input type="checkbox" id="searchAI" checked> AI Search
+            </label>
+        </div>
+        <div class="loading" id="searchLoading">
+            <div class="spinner"></div><br>Searching...
+        </div>
+        <div class="results" id="searchResults">
+            <div class="empty-state">
+                <h3>Search GitHub Repos</h3>
+                <p>Enter a search query or describe what you need and let AI find it for you</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- List Repos -->
+    <div class="panel" id="panel-repos">
+        <div class="input-group">
+            <input type="text" id="repoUsername" placeholder="GitHub username"
+                   onkeydown="if(event.key==='Enter')listRepos()">
+            <button onclick="listRepos()">List Repos</button>
+        </div>
+        <div class="loading" id="reposLoading">
+            <div class="spinner"></div><br>Fetching repositories...
+        </div>
+        <div class="results" id="reposResults">
+            <div class="empty-state">
+                <h3>List User Repos</h3>
+                <p>Enter a GitHub username to see all their public repos with descriptions</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analyze & Extract -->
+    <div class="panel" id="panel-analyze">
+        <div class="input-group">
+            <input type="text" id="analyzeRepo" placeholder="owner/repo or GitHub URL"
+                   onkeydown="if(event.key==='Enter')analyzeRepo()">
+            <button onclick="analyzeRepo()">Analyze</button>
+        </div>
+        <div class="loading" id="analyzeLoading">
+            <div class="spinner"></div><br>Analyzing repository (this may take a minute)...
+        </div>
+        <div id="analyzeResults"></div>
+    </div>
+
+    <!-- Manual Input -->
+    <div class="panel" id="panel-manual">
+        <div class="card" style="padding:24px">
+            <h3 style="margin-bottom:16px">Extract Features to a Target</h3>
+            <p style="margin-bottom:16px">Input a GitHub repo (public or private if you have a token) and extract all features, packaged into a target directory.</p>
+            <div style="display:flex;flex-direction:column;gap:12px">
+                <div>
+                    <label style="font-size:13px;color:var(--text-dim);display:block;margin-bottom:6px">Source Repository</label>
+                    <input type="text" id="manualRepo" placeholder="owner/repo or https://github.com/owner/repo" style="width:100%">
+                </div>
+                <div>
+                    <label style="font-size:13px;color:var(--text-dim);display:block;margin-bottom:6px">Target Directory (where to save packaged features)</label>
+                    <input type="text" id="manualTarget" placeholder="./extracted_features (default)" style="width:100%">
+                </div>
+                <div>
+                    <label style="font-size:13px;color:var(--text-dim);display:block;margin-bottom:6px">Specific Features (leave empty for all)</label>
+                    <input type="text" id="manualFeatures" placeholder="auth, api-client, database (comma separated)" style="width:100%">
+                </div>
+                <button class="green" onclick="manualExtract()" style="align-self:flex-start">
+                    Extract & Package
+                </button>
+            </div>
+        </div>
+        <div class="loading" id="manualLoading">
+            <div class="spinner"></div><br>Extracting and packaging features...
+        </div>
+        <div id="manualResults"></div>
+    </div>
+</div>
+
+<!-- Extract Modal -->
+<div class="modal-overlay" id="extractModal">
+    <div class="modal">
+        <h3>Extract Features</h3>
+        <div class="form-group">
+            <label>Repository</label>
+            <input type="text" id="modalRepo" readonly>
+        </div>
+        <div class="form-group">
+            <label>Output Directory</label>
+            <input type="text" id="modalOutput" value="./extracted_features">
+        </div>
+        <div class="form-group">
+            <label>Features (empty = all)</label>
+            <input type="text" id="modalFeatures" placeholder="Comma-separated feature names">
+        </div>
+        <div class="modal-actions">
+            <button class="secondary" onclick="closeModal()">Cancel</button>
+            <button class="green" onclick="doExtract()">Extract</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// Tab switching
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+    event.target.classList.add('active');
+}
+
+// Toast
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type + ' show';
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// API helper
+async function api(url, data) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    });
+    return await res.json();
+}
+
+// Chat
+async function sendChat() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    const messages = document.getElementById('chatMessages');
+    messages.innerHTML += `<div class="chat-message user"><div class="label">You</div><div>${escHtml(msg)}</div></div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    messages.innerHTML += `<div class="chat-message ai" id="aiTyping"><div class="label">AI</div><div><div class="spinner" style="width:16px;height:16px;border-width:2px"></div></div></div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+        const data = await api('/api/chat', {message: msg});
+        document.getElementById('aiTyping').remove();
+        if (data.error) {
+            messages.innerHTML += `<div class="chat-message ai"><div class="label">AI</div><div style="color:var(--red)">${escHtml(data.error)}</div></div>`;
+        } else {
+            messages.innerHTML += `<div class="chat-message ai"><div class="label">AI</div><div>${formatResponse(data.response)}</div></div>`;
+        }
+    } catch(e) {
+        document.getElementById('aiTyping')?.remove();
+        messages.innerHTML += `<div class="chat-message ai"><div class="label">AI</div><div style="color:var(--red)">Error: ${escHtml(e.message)}</div></div>`;
+    }
+    messages.scrollTop = messages.scrollHeight;
+}
+
+// Search
+async function searchRepos() {
+    const query = document.getElementById('searchQuery').value.trim();
+    if (!query) return;
+
+    document.getElementById('searchLoading').classList.add('active');
+    document.getElementById('searchResults').innerHTML = '';
+
+    try {
+        const data = await api('/api/search', {
+            query,
+            language: document.getElementById('searchLang').value || null,
+            min_stars: parseInt(document.getElementById('searchStars').value) || 0,
+            use_ai: document.getElementById('searchAI').checked,
+        });
+
+        document.getElementById('searchLoading').classList.remove('active');
+
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        const results = document.getElementById('searchResults');
+        if (!data.repos || data.repos.length === 0) {
+            results.innerHTML = '<div class="empty-state"><h3>No results</h3><p>Try different search terms</p></div>';
+            return;
+        }
+
+        results.innerHTML = data.repos.map(r => repoCard(r)).join('');
+    } catch(e) {
+        document.getElementById('searchLoading').classList.remove('active');
+        showToast('Search failed: ' + e.message, 'error');
+    }
+}
+
+// List repos
+async function listRepos() {
+    const username = document.getElementById('repoUsername').value.trim();
+    if (!username) return;
+
+    document.getElementById('reposLoading').classList.add('active');
+    document.getElementById('reposResults').innerHTML = '';
+
+    try {
+        const data = await api('/api/list-repos', {username});
+        document.getElementById('reposLoading').classList.remove('active');
+
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        const results = document.getElementById('reposResults');
+        if (!data.repos || data.repos.length === 0) {
+            results.innerHTML = '<div class="empty-state"><h3>No repos found</h3></div>';
+            return;
+        }
+
+        results.innerHTML = `<p style="color:var(--text-dim);margin-bottom:12px">${data.repos.length} repositories found</p>` +
+            data.repos.map(r => repoCard(r)).join('');
+    } catch(e) {
+        document.getElementById('reposLoading').classList.remove('active');
+        showToast('Failed: ' + e.message, 'error');
+    }
+}
+
+// Analyze
+async function analyzeRepo() {
+    const repo = document.getElementById('analyzeRepo').value.trim();
+    if (!repo) return;
+
+    document.getElementById('analyzeLoading').classList.add('active');
+    document.getElementById('analyzeResults').innerHTML = '';
+
+    try {
+        const data = await api('/api/analyze', {repo});
+        document.getElementById('analyzeLoading').classList.remove('active');
+
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        let html = '';
+
+        // Repo info
+        if (data.repo) {
+            const r = data.repo;
+            html += `<div class="summary-panel">
+                <h3>${escHtml(r.full_name)}</h3>
+                <p style="color:var(--text-dim);margin-bottom:12px">${escHtml(r.description || '')}</p>
+                <div class="card-meta">
+                    <span>Stars: ${r.stars?.toLocaleString()}</span>
+                    <span>Forks: ${r.forks?.toLocaleString()}</span>
+                    <span>Language: ${r.language || 'N/A'}</span>
+                    <span>License: ${r.license || 'N/A'}</span>
+                </div>
+            </div>`;
+        }
+
+        // AI Summary
+        if (data.summary && typeof data.summary === 'object') {
+            const s = data.summary;
+            html += `<div class="summary-panel">
+                <h3>AI Analysis</h3>
+                <p>${escHtml(s.short_description || '')}</p>
+                <div class="summary-grid" style="margin-top:12px">
+                    <div class="summary-item">
+                        <label>Quality</label>
+                        <p>${s.quality_score}/10</p>
+                    </div>
+                    <div class="summary-item">
+                        <label>Complexity</label>
+                        <p>${s.complexity}</p>
+                    </div>
+                    <div class="summary-item">
+                        <label>Key Features</label>
+                        <p>${(s.key_features||[]).map(f=>`<span class="tag">${escHtml(f)}</span>`).join(' ')}</p>
+                    </div>
+                    <div class="summary-item">
+                        <label>Tech Stack</label>
+                        <p>${(s.tech_stack||[]).join(', ')}</p>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // Features
+        if (data.features && data.features.length > 0) {
+            html += `<h3 style="margin:16px 0 12px">Features (${data.features.length})</h3>`;
+            html += data.features.map(f => featureCard(f)).join('');
+
+            html += `<button class="green" style="margin-top:12px" onclick="openExtractModal('${escHtml(document.getElementById('analyzeRepo').value)}')">Extract All Features</button>`;
+        }
+
+        // Graph
+        if (data.graph) {
+            const g = data.graph;
+            html += `<div class="summary-panel" style="margin-top:16px">
+                <h3>Feature Graph</h3>
+                <div class="summary-grid">
+                    <div class="summary-item"><label>Total Features</label><p>${g.metadata?.total_features||0}</p></div>
+                    <div class="summary-item"><label>Relationships</label><p>${g.metadata?.total_relationships||0}</p></div>
+                    <div class="summary-item"><label>Independent</label><p>${g.metadata?.independent_features||0}</p></div>
+                    <div class="summary-item"><label>Clusters</label><p>${g.metadata?.clusters||0}</p></div>
+                </div>
+            </div>`;
+        }
+
+        document.getElementById('analyzeResults').innerHTML = html;
+    } catch(e) {
+        document.getElementById('analyzeLoading').classList.remove('active');
+        showToast('Analysis failed: ' + e.message, 'error');
+    }
+}
+
+// Manual extract
+async function manualExtract() {
+    const repo = document.getElementById('manualRepo').value.trim();
+    if (!repo) { showToast('Enter a repository', 'error'); return; }
+
+    const target = document.getElementById('manualTarget').value.trim();
+    const featStr = document.getElementById('manualFeatures').value.trim();
+    const features = featStr ? featStr.split(',').map(f => f.trim()) : [];
+
+    document.getElementById('manualLoading').classList.add('active');
+    document.getElementById('manualResults').innerHTML = '';
+
+    try {
+        const data = await api('/api/extract', {repo, features, target_dir: target});
+        document.getElementById('manualLoading').classList.remove('active');
+
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        let html = `<div class="summary-panel">
+            <h3 style="color:var(--green)">Features Extracted!</h3>
+            <p>${escHtml(data.message || '')}</p>
+            <div class="summary-grid" style="margin-top:12px">
+                <div class="summary-item"><label>Package</label><p>${escHtml(data.package_dir || '')}</p></div>
+                <div class="summary-item"><label>Files</label><p>${data.files_count || 0}</p></div>
+            </div>
+        </div>`;
+
+        if (data.features) {
+            html += `<h3 style="margin:16px 0 12px">Extracted Features</h3>`;
+            html += data.features.map(f => featureCard(f)).join('');
+        }
+
+        document.getElementById('manualResults').innerHTML = html;
+        showToast('Features extracted successfully!', 'success');
+    } catch(e) {
+        document.getElementById('manualLoading').classList.remove('active');
+        showToast('Extraction failed: ' + e.message, 'error');
+    }
+}
+
+// Extract modal
+function openExtractModal(repo) {
+    document.getElementById('modalRepo').value = repo;
+    document.getElementById('extractModal').classList.add('active');
+}
+function closeModal() {
+    document.getElementById('extractModal').classList.remove('active');
+}
+async function doExtract() {
+    const repo = document.getElementById('modalRepo').value;
+    const output = document.getElementById('modalOutput').value;
+    const featStr = document.getElementById('modalFeatures').value.trim();
+    const features = featStr ? featStr.split(',').map(f => f.trim()) : [];
+    closeModal();
+
+    showToast('Extracting features...', 'success');
+    try {
+        const data = await api('/api/extract', {repo, features, target_dir: output});
+        if (data.error) {
+            showToast(data.error, 'error');
+        } else {
+            showToast(`Packaged ${data.features?.length || 0} features to ${data.package_dir}`, 'success');
+        }
+    } catch(e) {
+        showToast('Extraction failed: ' + e.message, 'error');
+    }
+}
+
+// Card renderers
+function repoCard(r) {
+    const desc = r.description ? escHtml(r.description).substring(0, 120) : '<i style="color:var(--text-dim)">No description</i>';
+    const score = r.ai_score ? `<span class="score">${r.ai_score.toFixed(1)}/10</span>` : '';
+    const updated = r.last_updated ? r.last_updated.substring(0, 10) : '';
+    return `<div class="card">
+        <h3><a href="${r.url || '#'}" target="_blank">${escHtml(r.full_name || '')}</a> ${score}</h3>
+        <p>${desc}</p>
+        <div class="card-meta">
+            <span>Stars: ${(r.stars||0).toLocaleString()}</span>
+            <span>Forks: ${(r.forks||0).toLocaleString()}</span>
+            <span>${r.language || ''}</span>
+            <span>${updated}</span>
+        </div>
+        <div class="card-actions">
+            <button class="secondary" onclick="document.getElementById('analyzeRepo').value='${escHtml(r.full_name||'')}';switchTab('analyze');document.querySelector('[onclick*=analyze]').classList.add('active')">Analyze</button>
+            <button class="green" onclick="openExtractModal('${escHtml(r.full_name||'')}')">Extract</button>
+        </div>
+    </div>`;
+}
+
+function featureCard(f) {
+    const complexity = f.estimated_complexity || 'medium';
+    const deps = (f.external_packages || []).slice(0, 5);
+    const files = (f.files || []).slice(0, 3);
+    return `<div class="feature-card">
+        <h4>${escHtml(f.name || '')} <span class="complexity ${complexity}">${complexity}</span>
+        <span class="tag">${escHtml(f.category || '')}</span></h4>
+        <div class="desc">${escHtml(f.description || '')}</div>
+        ${files.length ? '<div style="margin-top:4px">' + files.map(p => `<span class="tag" style="font-size:10px">${escHtml(p)}</span>`).join('') + '</div>' : ''}
+        ${deps.length ? '<div style="margin-top:4px">Deps: ' + deps.map(d => `<span class="tag">${escHtml(d)}</span>`).join('') + '</div>' : ''}
+        ${f.integration_notes ? `<div style="margin-top:6px;font-size:12px;color:var(--text-dim)">Integration: ${escHtml(f.integration_notes)}</div>` : ''}
+    </div>`;
+}
+
+// Utils
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatResponse(text) {
+    if (!text) return '';
+    return escHtml(text).replace(/\n/g, '<br>');
+}
+
+// Check status on load
+fetch('/api/status').then(r=>r.json()).then(d=>{
+    const aiBadge = document.getElementById('aiStatus');
+    if(d.ai_available) {
+        aiBadge.className = 'badge ok';
+        aiBadge.textContent = 'AI: ' + d.ai_model;
+    } else {
+        aiBadge.className = 'badge err';
+        aiBadge.textContent = 'AI: Offline';
+    }
+});
+</script>
+</body>
+</html>

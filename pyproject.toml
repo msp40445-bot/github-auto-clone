@@ -27,14 +27,14 @@ classifiers = [
 dependencies = [
     "typer>=0.9.0",
     "httpx>=0.25.0",
-    "openai>=1.0.0",
+    "ollama>=0.4.0",
     "gitpython>=3.1.0",
     "rich>=13.0.0",
     "pydantic>=2.0.0",
     "networkx>=3.0",
     "pydantic-settings>=2.0.0",
     "tenacity>=8.0.0",
-    "tiktoken>=0.5.0",
+    "flask>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -47,12 +47,18 @@ dev = [
 
 [project.scripts]
 ghclone = "github_auto_clone.cli:app"
+ghclone-web = "github_auto_clone.web:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/github_auto_clone"]
 
+[tool.hatch.build.targets.wheel.shared-data]
+
 [tool.hatch.build.targets.sdist]
 include = ["src/github_auto_clone"]
+
+[tool.hatch.build]
+artifacts = ["src/github_auto_clone/templates/**"]
 
 [tool.ruff]
 target-version = "py310"

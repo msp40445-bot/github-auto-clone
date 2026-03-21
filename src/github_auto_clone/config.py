@@ -15,10 +15,13 @@ class Settings(BaseSettings):
     github_token: str = Field(default="", alias="GITHUB_TOKEN")
     github_api_url: str = Field(default="https://api.github.com", alias="GITHUB_API_URL")
 
-    # OpenAI
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
-    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
+    # Ollama (local AI - free, runs on macOS)
+    ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
+    ollama_model: str = Field(default="qwen2.5:1.5b", alias="OLLAMA_MODEL")
+
+    # Rate limiting / safety
+    github_requests_per_minute: int = Field(default=30, alias="GAC_RATE_LIMIT")
+    request_delay_seconds: float = Field(default=1.0, alias="GAC_REQUEST_DELAY")
 
     # Paths
     work_dir: Path = Field(default=Path.home() / ".github-auto-clone", alias="GAC_WORK_DIR")
@@ -43,8 +46,8 @@ class Settings(BaseSettings):
         return bool(self.github_token)
 
     @property
-    def has_openai_key(self) -> bool:
-        return bool(self.openai_api_key)
+    def has_ollama(self) -> bool:
+        return bool(self.ollama_host)
 
 
 def get_settings() -> Settings:

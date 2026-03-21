@@ -52,7 +52,7 @@ class Packager:
         # Write extracted files
         written_files: list[str] = []
         for file_path, content in extracted_files.items():
-            if rewrite_imports and self.settings.has_openai_key:
+            if rewrite_imports:
                 content = self._rewrite_file_imports(content, repo, file_path)
 
             dest_path = src_dir / file_path
@@ -78,18 +78,27 @@ class Packager:
         (package_dir / "README.md").write_text(readme, encoding="utf-8")
 
         # Generate integration guide
-        if self.settings.has_openai_key:
-            guide = self.ai.generate_integration_guide(features, repo)
-            (package_dir / "INTEGRATION.md").write_text(guide, encoding="utf-8")
+        if self.settings.has_ollama:
+            try:
+                guide = self.ai.generate_integration_guide(features, repo)
+                (package_dir / "INTEGRATION.md").write_text(
+                    guide, encoding="utf-8",
+                )
 
-            # Generate safety notes
-            safety = self.ai.generate_safety_notes(features, extracted_files)
-            if safety:
-                safety_content = "# Safety & Security Notes\n\n"
-                for i, note in enumerate(safety, 1):
-                    safety_content += f"{i}. {note}\n"
-                (package_dir / "SAFETY.md").write_text(safety_content, encoding="utf-8")
-                manifest.safety_notes = safety
+                # Generate safety notes
+                safety = self.ai.generate_safety_notes(
+                    features, extracted_files,
+                )
+                if safety:
+                    safety_content = "# Safety & Security Notes\n\n"
+                    for i, note in enumerate(safety, 1):
+                        safety_content += f"{i}. {note}\n"
+                    (package_dir / "SAFETY.md").write_text(
+                        safety_content, encoding="utf-8",
+                    )
+                    manifest.safety_notes = safety
+            except Exception:
+                logger.warning("AI unavailable, skipping guides")
 
         # Generate dependency file
         self._generate_dependency_file(features, repo, package_dir)
